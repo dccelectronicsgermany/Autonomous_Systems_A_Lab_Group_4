@@ -54,7 +54,7 @@ from .interface import LineFollowingInterface
 class MyLineFollower(LineFollowingInterface):
     """
     Student implementation of line following.
-    
+
     Detect a green line and steer to stay centered on it.
     """
 
@@ -62,7 +62,6 @@ class MyLineFollower(LineFollowingInterface):
         super().__init__("my_line_follower")
         self._frame_count = 0
         self._lost_frames = 0
-        self._noise_kernel = np.ones((3, 3), dtype=np.uint8)
 
         # Register camera callback
         self.on_camera_image(self.detect_line)
@@ -89,7 +88,12 @@ class MyLineFollower(LineFollowingInterface):
         upper_green = np.array([100, 255, 100])
         mask = cv2.inRange(roi, lower_green, upper_green)
 
-        self.show_notification("ROI and green mask applied")
+        # Reduce noise with morphological operations
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+        self.show_notification("Noise reduction applied")
 
         return None
 
