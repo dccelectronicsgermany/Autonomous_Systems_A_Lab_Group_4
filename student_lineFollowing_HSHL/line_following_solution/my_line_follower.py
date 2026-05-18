@@ -98,7 +98,10 @@ class MyLineFollower(LineFollowingInterface):
 
         if not contours:
             self._lost_frames += 1
-            self.show_warning("No line detected")
+            if self._lost_frames > 10:
+                self.show_alert("Line lost!")
+            else:
+                self.show_warning("No line detected")
             return None
 
         largest_contour = max(contours, key=cv2.contourArea)
@@ -114,9 +117,18 @@ class MyLineFollower(LineFollowingInterface):
 
         line_center_x = M["m10"] / M["m00"]
 
-        self.show_notification(f"Line detected at x={line_center_x:.0f}")
+        # Steering offset relative to image center
+        image_center_x = w / 2.0
+        offset = (line_center_x - image_center_x) / image_center_x
+        steering = float(np.clip(offset * 0.5, -1.0, 1.0))
 
-        return None
+        self._lost_frames = 0
+
+        if self._frame_count % 30 == 0:
+            self.get_logger().info(f"steer={steering:.2f} line_x={line_center_x:.0f} frame={self._frame_count}")
+        self.show_notification(f"steer={steering:.2f}")
+
+        return steering
 
 
 def main(args=None):
