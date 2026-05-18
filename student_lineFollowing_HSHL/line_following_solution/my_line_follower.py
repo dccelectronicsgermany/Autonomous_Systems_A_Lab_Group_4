@@ -93,7 +93,28 @@ class MyLineFollower(LineFollowingInterface):
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
-        self.show_notification("Noise reduction applied")
+        # Find contours and calculate centroid
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if not contours:
+            self._lost_frames += 1
+            self.show_warning("No line detected")
+            return None
+
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        if cv2.contourArea(largest_contour) < 100:
+            self._lost_frames += 1
+            self.show_warning("Contour too small")
+            return None
+
+        M = cv2.moments(largest_contour)
+        if M["m00"] == 0:
+            return None
+
+        line_center_x = M["m10"] / M["m00"]
+
+        self.show_notification(f"Line detected at x={line_center_x:.0f}")
 
         return None
 
