@@ -61,7 +61,9 @@ class MyLineFollower(LineFollowingInterface):
     def __init__(self):
         super().__init__("my_line_follower")
         self._frame_count = 0
-        
+        self._lost_frames = 0
+        self._noise_kernel = np.ones((3, 3), dtype=np.uint8)
+
         # Register camera callback
         self.on_camera_image(self.detect_line)
         self.get_logger().info("MyLineFollower initialized — ready to detect green line")
@@ -69,20 +71,27 @@ class MyLineFollower(LineFollowingInterface):
     def detect_line(self, image: np.ndarray) -> float | None:
         """
         Detect the green line and return steering command.
-        
+
         Args:
             image: BGR image from camera, shape (720, 1280, 3)
-        
+
         Returns:
             Steering value in [-1.0, 1.0], or None if line not detected.
         """
-        _ = image
-        test_steering = -0.75
         self._frame_count += 1
-        if self._frame_count % 30 == 0:
-            self.get_logger().info(f"TEST MODE steer={test_steering:.2f} frame={self._frame_count}")
-        self.show_notification(f"TEST MODE steer={test_steering:.2f}")
-        return test_steering
+
+        # Focus on bottom half of image (road area only)
+        h, w = image.shape[:2]
+        roi = image[h // 2:, :]
+
+        # Green color mask in BGR
+        lower_green = np.array([0, 100, 0])
+        upper_green = np.array([100, 255, 100])
+        mask = cv2.inRange(roi, lower_green, upper_green)
+
+        self.show_notification("ROI and green mask applied")
+
+        return None
 
 
 def main(args=None):
