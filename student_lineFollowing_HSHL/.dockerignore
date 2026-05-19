@@ -1,0 +1,7 @@
+bags/
+extracted_images/
+visualization_output/
+__pycache__/
+*.pyc
+.git/
+.venv/

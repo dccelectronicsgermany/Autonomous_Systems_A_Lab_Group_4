@@ -45,90 +45,99 @@ HELPERS
     self.current_image            latest camera frame (or None)
 """
 import cv2          # type: ignore
+import joblib       # type: ignore
 import numpy as np  # type: ignore
 import rclpy        # type: ignore
+from pathlib import Path
 
 from .interface import LineFollowingInterface
 
+# Load model and steering map once at startup
+_BASE      = Path(__file__).parent.parent / "models"
+_MODEL     = joblib.load(str(_BASE / "svm_line_follower.joblib"))
+_STEER_MAP = np.load(str(_BASE / "class_to_steer.npy"))  # [-0.30, 0.00, +0.30]
+
+_PATCH_SIZE   = 64
+_TARGET_W     = 320
+_TARGET_H     = 180
+_ROI_FRACTION = 0.45
+
+
+def _compute_edges(roi_gray: np.ndarray) -> np.ndarray:
+    blurred = cv2.GaussianBlur(roi_gray, (5, 5), 0)
+    return cv2.Canny(blurred, 50, 150)
+
+
+def _dominant_segment(edges: np.ndarray):
+    lines = cv2.HoughLinesP(
+        edges, rho=1, theta=np.pi / 180,
+        threshold=25, minLineLength=25, maxLineGap=15,
+    )
+    if lines is None:
+        return None
+    best, best_len, best_angle = None, 0, 0.0
+    for x1, y1, x2, y2 in lines[:, 0]:
+        length = np.hypot(x2 - x1, y2 - y1)
+        if length > best_len:
+            best_len = length
+            best = ((x1 + x2) / 2, (y1 + y2) / 2)
+            best_angle = float(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
+    return best[0], best[1], best_angle
+
+
+def _crop_patch(edge_img: np.ndarray, cx: float, cy: float) -> np.ndarray:
+    h, w = edge_img.shape
+    half = _PATCH_SIZE // 2
+    x1 = max(0, int(cx) - half); x2 = min(w, int(cx) + half)
+    y1 = max(0, int(cy) - half); y2 = min(h, int(cy) + half)
+    return cv2.resize(edge_img[y1:y2, x1:x2], (_PATCH_SIZE, _PATCH_SIZE))
+
+
+def _extract_features(img_bgr: np.ndarray):
+    """Returns (feature_vector, x_norm) or (None, None) if no segment found."""
+    img   = cv2.resize(img_bgr, (_TARGET_W, _TARGET_H))
+    gray  = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    y0    = int(_TARGET_H * _ROI_FRACTION)
+    roi   = gray[y0:, :]
+    edges = _compute_edges(roi)
+    seg   = _dominant_segment(edges)
+    if seg is None:
+        return None, None
+    cx, cy, angle = seg
+    patch      = _crop_patch(edges, cx, cy)
+    patch_feat = (patch.astype(np.float32) / 255.0).flatten()
+    x_norm     = np.float32((cx / roi.shape[1]) * 2.0 - 1.0)
+    a_norm     = np.float32(angle / 90.0)
+    return np.append(patch_feat, [x_norm, a_norm]), float(x_norm)
+
 
 class MyLineFollower(LineFollowingInterface):
-    """
-    Student implementation of line following.
-
-    Detect a green line and steer to stay centered on it.
-    """
+    """SVM-based line follower using Lab07b edge-patch pipeline."""
 
     def __init__(self):
         super().__init__("my_line_follower")
         self._frame_count = 0
-        self._lost_frames = 0
-
-        # Register camera callback
         self.on_camera_image(self.detect_line)
-        self.get_logger().info("MyLineFollower initialized — ready to detect green line")
+        self.get_logger().info("MyLineFollower (SVM + Lab07b pipeline) initialized")
 
     def detect_line(self, image: np.ndarray) -> float | None:
-        """
-        Detect the green line and return steering command.
-
-        Args:
-            image: BGR image from camera, shape (720, 1280, 3)
-
-        Returns:
-            Steering value in [-1.0, 1.0], or None if line not detected.
-        """
         self._frame_count += 1
 
-        # Focus on bottom half of image (road area only)
-        h, w = image.shape[:2]
-        roi = image[h // 2:, :]
-
-        # Green color mask in BGR
-        lower_green = np.array([0, 100, 0])
-        upper_green = np.array([100, 255, 100])
-        mask = cv2.inRange(roi, lower_green, upper_green)
-
-        # Reduce noise with morphological operations
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-
-        # Find contours and calculate centroid
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        if not contours:
-            self._lost_frames += 1
-            if self._lost_frames > 10:
-                self.show_alert("Line lost!")
-            else:
-                self.show_warning("No line detected")
+        feat, x_norm = _extract_features(image)
+        if feat is None:
+            self.show_warning("No line segment detected")
             return None
 
-        largest_contour = max(contours, key=cv2.contourArea)
-
-        if cv2.contourArea(largest_contour) < 100:
-            self._lost_frames += 1
-            self.show_warning("Contour too small")
-            return None
-
-        M = cv2.moments(largest_contour)
-        if M["m00"] == 0:
-            return None
-
-        line_center_x = M["m10"] / M["m00"]
-
-        # Steering offset relative to image center
-        image_center_x = w / 2.0
-        offset = (line_center_x - image_center_x) / image_center_x
-        steering = float(np.clip(offset * 0.5, -1.0, 1.0))
-
-        self._lost_frames = 0
+        cls   = int(_MODEL.predict(feat.reshape(1, -1))[0])
+        steer = float(np.clip(_STEER_MAP[cls], -1.0, 1.0))
 
         if self._frame_count % 30 == 0:
-            self.get_logger().info(f"steer={steering:.2f} line_x={line_center_x:.0f} frame={self._frame_count}")
-        self.show_notification(f"steer={steering:.2f}")
+            self.get_logger().info(
+                f"steer={steer:+.2f}  class={['LEFT','STRAIGHT','RIGHT'][cls]}  x_norm={x_norm:+.2f}"
+            )
+        self.show_notification(f"steer={steer:+.2f}")
 
-        return steering
+        return steer
 
 
 def main(args=None):
