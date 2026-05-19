@@ -15,3 +15,8 @@ visualization_output/
 *.bag
 data/*.db3
 data/*.csv
+data/*.npy
+models/*.npy
+models/*.joblib
+student_lineFollowing_HSHL/models/*.npy
+student_lineFollowing_HSHL/models/*.joblib

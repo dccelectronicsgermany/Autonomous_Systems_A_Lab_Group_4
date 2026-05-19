@@ -155,3 +155,4 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
+# BASIC CODE STRUCTURE BEFORE DATA EVALUATION
