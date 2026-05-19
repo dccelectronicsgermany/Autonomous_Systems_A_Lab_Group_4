@@ -1,1 +1,17 @@
 drafts/
+
+# ROS 2 bag files — too large for git
+student_lineFollowing_HSHL/bags/
+*.db3
+
+# Extracted frames and visualization output
+extracted_images/
+visualization_output/
+
+# Python virtual environment
+.venv/
+
+# Large data files
+*.bag
+data/*.db3
+data/*.csv
