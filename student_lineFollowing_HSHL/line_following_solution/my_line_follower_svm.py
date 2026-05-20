@@ -45,7 +45,7 @@ HELPERS
     self.current_image            latest camera frame (or None)
 """
 import cv2          # type: ignore
-import joblib       # type: ignore
+import pickle
 import numpy as np  # type: ignore
 import rclpy        # type: ignore
 from pathlib import Path
@@ -54,7 +54,7 @@ from .interface import LineFollowingInterface
 
 # Load model and steering map once at startup
 _BASE      = Path(__file__).parent.parent / "models"
-_MODEL     = joblib.load(str(_BASE / "svm_line_follower.joblib"))
+_MODEL     = pickle.load(open(str(_BASE / "svm_line_follower.pkl"), "rb"))
 _STEER_MAP = np.load(str(_BASE / "class_to_steer.npy"))  # [-0.30, 0.00, +0.30]
 
 _PATCH_SIZE   = 64
