@@ -52,7 +52,7 @@ from pathlib import Path
 
 from .interface import LineFollowingInterface
 
-_MODEL = pickle.load(open(str(Path(__file__).parent / "svm_line_follower.pkl"), "rb"))
+_MODEL = pickle.load(open(str(Path(__file__).parent / "line_following_solution/Autonomous_Team4.pkl"), "rb"))
 
 
 class MyLineFollower(LineFollowingInterface):
