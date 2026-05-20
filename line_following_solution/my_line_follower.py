@@ -45,23 +45,27 @@ HELPERS
     self.current_image            latest camera frame (or None)
 """
 import cv2          # type: ignore
+import pickle
 import numpy as np  # type: ignore
 import rclpy        # type: ignore
+from pathlib import Path
 
 from .interface import LineFollowingInterface
+
+_MODEL = pickle.load(open(str(Path(__file__).parent / "svm_line_follower.pkl"), "rb"))
 
 
 class MyLineFollower(LineFollowingInterface):
     """
     Student implementation of line following.
-    
+
     Detect a green line and steer to stay centered on it.
     """
 
     def __init__(self):
         super().__init__("my_line_follower")
         self._frame_count = 0
-        
+
         # Register camera callback
         self.on_camera_image(self.detect_line)
         self.get_logger().info("MyLineFollower initialized — ready to detect green line")
@@ -69,20 +73,62 @@ class MyLineFollower(LineFollowingInterface):
     def detect_line(self, image: np.ndarray) -> float | None:
         """
         Detect the green line and return steering command.
-        
+
         Args:
             image: BGR image from camera, shape (720, 1280, 3)
-        
+
         Returns:
             Steering value in [-1.0, 1.0], or None if line not detected.
         """
-        _ = image
-        test_steering = -0.75
         self._frame_count += 1
+
+        # Resize and extract ROI
+        img = cv2.resize(image, (320, 180))
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        y0 = int(180 * 0.45)
+        roi = gray[y0:, :]
+
+        # Edge detection
+        blurred = cv2.GaussianBlur(roi, (5, 5), 0)
+        edges = cv2.Canny(blurred, 50, 150)
+
+        # Find dominant line segment
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=25, minLineLength=25, maxLineGap=15)
+        if lines is None:
+            self.show_warning("No line segment detected")
+            return None
+
+        best, best_len, best_angle = None, 0, 0.0
+        for x1, y1, x2, y2 in lines[:, 0]:
+            length = np.hypot(x2 - x1, y2 - y1)
+            if length > best_len:
+                best_len = length
+                best = ((x1 + x2) / 2, (y1 + y2) / 2)
+                best_angle = float(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
+
+        cx, cy = best
+        x_norm = float((cx / roi.shape[1]) * 2.0 - 1.0)
+
+        # Crop patch around segment center
+        half = 32
+        h, w = edges.shape
+        patch = cv2.resize(
+            edges[max(0, int(cy) - half):min(h, int(cy) + half),
+                  max(0, int(cx) - half):min(w, int(cx) + half)],
+            (64, 64)
+        )
+        patch_feat = (patch.astype(np.float32) / 255.0).flatten()
+        feat = np.append(patch_feat, [np.float32(x_norm), np.float32(best_angle / 90.0)])
+
+        cls = int(_MODEL.predict(feat.reshape(1, -1))[0])
+        steer = float(np.clip(x_norm, -1.0, 1.0))
+
         if self._frame_count % 30 == 0:
-            self.get_logger().info(f"TEST MODE steer={test_steering:.2f} frame={self._frame_count}")
-        self.show_notification(f"TEST MODE steer={test_steering:.2f}")
-        return test_steering
+            self.get_logger().info(
+                f"steer={steer:+.2f}  class={['LEFT','STRAIGHT','RIGHT'][cls]}  x_norm={x_norm:+.2f}  frame={self._frame_count}"
+            )
+        self.show_notification(f"steer={steer:+.2f}")
+        return steer
 
 
 def main(args=None):
