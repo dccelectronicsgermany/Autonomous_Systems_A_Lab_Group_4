@@ -129,7 +129,7 @@ class MyLineFollower(LineFollowingInterface):
             return None
 
         cls   = int(_MODEL.predict(feat.reshape(1, -1))[0])
-        steer = float(np.clip(_STEER_MAP[cls], -1.0, 1.0))
+        steer = float(np.clip(x_norm, -1.0, 1.0))
 
         if self._frame_count % 30 == 0:
             self.get_logger().info(
