@@ -65,7 +65,7 @@ class MyLineFollower(LineFollowingInterface):
         # Continuous steering: offset from image center, scaled to [-1, 1]
         image_center_x = w / 2.0
         offset = (line_center_x - image_center_x) / image_center_x
-        steering = float(np.clip(offset, -1.0, 1.0))
+        steering = float(np.clip(offset * abs(offset) * 2.0, -1.0, 1.0))
 
         self._lost_frames = 0
 
