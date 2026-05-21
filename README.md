@@ -82,7 +82,7 @@ The system must avoid:
 •	Communication failures between components 
 
 •	Unstable control behaviour during curves 
-Formal verification using UPPAAL is used to analyse and validate timing and behavioural p
+Formal verification using UPPAAL is used to analyse and validate timing and behavioural performance
 # Machine Learning Component
 The project uses:
 
