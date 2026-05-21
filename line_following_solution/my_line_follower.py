@@ -178,7 +178,7 @@ class MyLineFollower(LineFollowingInterface):
 
         # SVM adds a small directional nudge (0.1) on top of PID — PID remains dominant
         svm_hint = {0: -1.0, 1: 0.0, 2: 1.0}[cls]
-        steer = float(np.clip(pid + 0.1 * svm_hint, -1.0, 1.0))
+        steer = float(np.clip(pid + 0.03 * svm_hint, -1.0, 1.0))
 
         if self._frame_count % 30 == 0:
             self.get_logger().info(
