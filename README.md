@@ -3,10 +3,15 @@ This project is inspired by modern Truck Platooning and Advanced Driver Assistan
 It focuses on intelligent line-following and autonomous driving concepts using machine learning, system modelling, and formal verification techniques.
 The system combines:
 •	SVM-based line following 
+
 •	Scenario and requirements modelling 
+
 •	Communication and protocol specification 
+
 •	Timed automata and UPPAAL modelling 
+
 •	Control behaviour design 
+
 •	Simulation and system integration
 # Objectives
 The main objective is to design and analyse a simplified autonomous driving system capable of:
