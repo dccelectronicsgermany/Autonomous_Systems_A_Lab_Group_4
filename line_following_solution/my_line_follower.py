@@ -52,12 +52,12 @@ from pathlib import Path
 
 from .interface import LineFollowingInterface
 
-_MODEL = pickle.load(open(str(Path(__file__).parent / "svm_line_follower_5feat.pkl"), "rb"))
+_MODEL = pickle.load(open(str(Path(__file__).parent / "SVM_Line_Following_SVR.pkl"), "rb"))
 
 _LOWER_GREEN = np.array([40,  40,  40])
 _UPPER_GREEN = np.array([90, 255, 255])
 _MIN_AREA    = 100
-_CAM_OFFSET  = 0.15   # camera is mounted left of center — shifts line right in image
+_CAM_OFFSET  = 0.05  # camera mounted left of center — subtract to correct steering bias
 
 
 class MyLineFollower(LineFollowingInterface):
@@ -67,19 +67,17 @@ class MyLineFollower(LineFollowingInterface):
     Detect a green line and steer to stay centered on it.
     """
 
-    _Kp = 0.8
-    _Ki = 0.01
-    _Kd = 0.15
+    _Kp = 1.0
+    _Kd = 0.08
 
     def __init__(self):
         super().__init__("my_line_follower")
         self._frame_count = 0
         self._lost_frames  = 0
         self._prev_error   = 0.0
-        self._integral     = 0.0
 
         self.on_camera_image(self.detect_line)
-        self.get_logger().info("MyLineFollower initialized — 5-feature SVM + PID steering")
+        self.get_logger().info("MyLineFollower initialized — 6-feature SVR (near zone + edge) → PD steering")
 
     def detect_line(self, image: np.ndarray) -> float | None:
         """
@@ -101,28 +99,9 @@ class MyLineFollower(LineFollowingInterface):
             mask   = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel)
             return mask
 
-        def _offset_from_mask(mask: np.ndarray) -> float | None:
-            """Get normalized horizontal offset from a green mask. Returns None if no contour."""
-            cols = mask.shape[1]
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if not contours:
-                return None
-            contour = max(contours, key=cv2.contourArea)
-            if cv2.contourArea(contour) < _MIN_AREA:
-                return None
-            rows = mask.shape[0]
-            [vx, vy, x, y] = cv2.fitLine(contour, cv2.DIST_L2, 0, 0.01, 0.01)
-            vx, vy, x, y   = float(vx[0]), float(vy[0]), float(x[0]), float(y[0])
-            if abs(vy) > 0.01:
-                line_x = x + (rows // 2 - y) * (vx / vy)
-            else:
-                M      = cv2.moments(contour)
-                line_x = M["m10"] / M["m00"] if M["m00"] > 0 else cols / 2
-            return float(np.clip((line_x - cols / 2.0) / (cols / 2.0), -1.0, 1.0))
-
-        def _svm_features(img_bgr: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
-            """Compute 5 SVM features from full image + its green mask (matches training pipeline)."""
-            rows, cols = img_bgr.shape[:2]
+        def _svm_features(mask: np.ndarray) -> np.ndarray | None:
+            """Compute 6 features from near-zone green mask: 5 contour + 1 edge-based center."""
+            rows, cols = mask.shape[:2]
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if not contours:
                 return None
@@ -145,20 +124,21 @@ class MyLineFollower(LineFollowingInterface):
             hull         = cv2.convexHull(contour)
             hull_area    = cv2.contourArea(hull)
             solidity     = float(np.clip(area / (hull_area + 1e-6), 0.0, 1.0))
-            return np.array([offset, angle_norm, area_norm, aspect_ratio, solidity], dtype=np.float32)
+            # edge-based center: midpoint between leftmost and rightmost edge column
+            edges       = cv2.Canny(mask, 50, 150)
+            edge_cols   = np.where(edges.any(axis=0))[0]
+            if len(edge_cols) >= 2:
+                edge_center = (float(edge_cols[0]) + float(edge_cols[-1])) / 2.0
+                edge_offset = float(np.clip((edge_center - cols / 2.0) / (cols / 2.0), -1.0, 1.0))
+            else:
+                edge_offset = offset
+            return np.array([offset, angle_norm, area_norm, aspect_ratio, solidity, edge_offset], dtype=np.float32)
 
-        h = image.shape[0]
-        near_start = int(h * 0.50)
+        h         = image.shape[0]
+        near_mask = _green_mask(image[h // 2:, :])
+        feat      = _svm_features(near_mask)
 
-        # Near zone — current position + SVM features (trained on full image so use full image mask)
-        near_mask  = _green_mask(image[near_start:, :])
-        offset     = _offset_from_mask(near_mask)
-        if offset is not None:
-            offset = float(np.clip(offset - _CAM_OFFSET, -1.0, 1.0))
-        full_mask  = _green_mask(image)
-        feat       = _svm_features(image, full_mask)
-
-        if offset is None or feat is None:
+        if feat is None:
             self._lost_frames += 1
             if self._lost_frames > 10:
                 self.show_alert("Line lost!")
@@ -167,29 +147,15 @@ class MyLineFollower(LineFollowingInterface):
             return None
 
         self._lost_frames = 0
-        cls = int(_MODEL.predict(feat.reshape(1, -1))[0])
+        svr_offset = float(np.clip(_MODEL.predict(feat.reshape(1, -1))[0] - _CAM_OFFSET, -1.0, 1.0))
 
-        # PID steering
-        error            = offset
-        self._integral   = float(np.clip(self._integral + error, -1.0, 1.0))
+        # PD on SVR-predicted offset (no integral — SVR output is already smooth)
+        error            = svr_offset
         derivative       = error - self._prev_error
         self._prev_error = error
-        pid = self._Kp * error + self._Ki * self._integral + self._Kd * derivative
+        pid   = self._Kp * error + self._Kd * derivative
+        steer = float(np.clip(pid, -1.0, 1.0))
 
-        # SVM decides direction, offset magnitude drives the steer
-        if cls == 0:    # LEFT
-            steer = float(np.clip(pid, -1.0, 0.0))
-        elif cls == 2:  # RIGHT
-            steer = float(np.clip(pid, 0.0, 1.0))
-        else:           # STRAIGHT
-            steer = float(np.clip(pid, -1.0, 1.0))
-
-        if self._frame_count % 30 == 0:
-            self.get_logger().info(
-                f"steer={steer:+.2f}  class={['LEFT','STRAIGHT','RIGHT'][cls]}  "
-                f"offset={offset:+.2f}  "
-                f"P={self._Kp*error:+.2f}  I={self._Ki*self._integral:+.2f}  D={self._Kd*derivative:+.2f}  frame={self._frame_count}"
-            )
         return steer
 
 
