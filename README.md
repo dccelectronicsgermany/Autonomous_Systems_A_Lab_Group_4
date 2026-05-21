@@ -120,6 +120,7 @@ Support Vector Machines (SVMs) are used for:
 •	Margin-based classification 
 
 •	Nonlinear decision boundaries using RBF kernels 
+
 Performance is evaluated using:
 
 •	Accuracy 
@@ -141,6 +142,7 @@ The project simulates:
 •	Curved path handling 
 
 •	Dynamic control responses 
+
 The control system integrates:
 
 •	perception 
