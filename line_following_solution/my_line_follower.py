@@ -174,15 +174,10 @@ class MyLineFollower(LineFollowingInterface):
         self._integral    = float(np.clip(self._integral + error, -1.0, 1.0))
         derivative        = error - self._prev_error
         self._prev_error  = error
-        pid = self._Kp * error + self._Ki * self._integral + self._Kd * derivative
-
-        # SVM clamps the steer to the predicted direction; STRAIGHT allows full PID correction
-        if cls == 0:    # LEFT
-            steer = float(np.clip(pid, -1.0, 0.0))
-        elif cls == 2:  # RIGHT
-            steer = float(np.clip(pid, 0.0, 1.0))
-        else:           # STRAIGHT
-            steer = float(np.clip(pid, -1.0, 1.0))
+        steer = float(np.clip(
+            self._Kp * error + self._Ki * self._integral + self._Kd * derivative,
+            -1.0, 1.0
+        ))
 
         if self._frame_count % 30 == 0:
             self.get_logger().info(
@@ -190,6 +185,7 @@ class MyLineFollower(LineFollowingInterface):
                 f"near={offset:+.2f}  "
                 f"P={self._Kp*error:+.2f}  I={self._Ki*self._integral:+.2f}  D={self._Kd*derivative:+.2f}  frame={self._frame_count}"
             )
+   
         return steer
 
 
