@@ -95,6 +95,7 @@ The project uses:
 •	Minimal and extended feature spaces 
 
 •	ROC/AUC and confusion matrix analysis 
+
 The SVM classifier predicts steering commands based on extracted visual features.
 ## Feature Extraction
 Two approaches are explored:
