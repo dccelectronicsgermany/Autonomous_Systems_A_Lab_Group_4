@@ -52,7 +52,12 @@ from pathlib import Path
 
 from .interface import LineFollowingInterface
 
-_MODEL = pickle.load(open(str(Path(__file__).parent / "Team_4.pkl"), "rb"))
+_MODEL = pickle.load(open(str(Path(__file__).parent / "svm_line_follower_5feat.pkl"), "rb"))
+
+_LOWER_GREEN = np.array([40,  40,  40])
+_UPPER_GREEN = np.array([90, 255, 255])
+_MIN_AREA    = 100
+_CAM_OFFSET  = 0.15   # camera is mounted left of center — shifts line right in image
 
 
 class MyLineFollower(LineFollowingInterface):
@@ -62,13 +67,19 @@ class MyLineFollower(LineFollowingInterface):
     Detect a green line and steer to stay centered on it.
     """
 
+    _Kp = 0.8
+    _Ki = 0.01
+    _Kd = 0.15
+
     def __init__(self):
         super().__init__("my_line_follower")
         self._frame_count = 0
+        self._lost_frames  = 0
+        self._prev_error   = 0.0
+        self._integral     = 0.0
 
-        # Register camera callback
         self.on_camera_image(self.detect_line)
-        self.get_logger().info("MyLineFollower initialized — ready to detect green line")
+        self.get_logger().info("MyLineFollower initialized — 5-feature SVM + PID steering")
 
     def detect_line(self, image: np.ndarray) -> float | None:
         """
@@ -82,52 +93,99 @@ class MyLineFollower(LineFollowingInterface):
         """
         self._frame_count += 1
 
-        # Resize and extract ROI
-        img = cv2.resize(image, (320, 180))
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        y0 = int(180 * 0.45)
-        roi = gray[y0:, :]
+        def _green_mask(roi: np.ndarray) -> np.ndarray:
+            hsv    = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+            mask   = cv2.inRange(hsv, _LOWER_GREEN, _UPPER_GREEN)
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+            mask   = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+            mask   = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel)
+            return mask
 
-        # Edge detection
-        blurred = cv2.GaussianBlur(roi, (5, 5), 0)
-        edges = cv2.Canny(blurred, 50, 150)
+        def _offset_from_mask(mask: np.ndarray) -> float | None:
+            """Get normalized horizontal offset from a green mask. Returns None if no contour."""
+            cols = mask.shape[1]
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if not contours:
+                return None
+            contour = max(contours, key=cv2.contourArea)
+            if cv2.contourArea(contour) < _MIN_AREA:
+                return None
+            rows = mask.shape[0]
+            [vx, vy, x, y] = cv2.fitLine(contour, cv2.DIST_L2, 0, 0.01, 0.01)
+            vx, vy, x, y   = float(vx[0]), float(vy[0]), float(x[0]), float(y[0])
+            if abs(vy) > 0.01:
+                line_x = x + (rows // 2 - y) * (vx / vy)
+            else:
+                M      = cv2.moments(contour)
+                line_x = M["m10"] / M["m00"] if M["m00"] > 0 else cols / 2
+            return float(np.clip((line_x - cols / 2.0) / (cols / 2.0), -1.0, 1.0))
 
-        # Find dominant line segment
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=25, minLineLength=25, maxLineGap=15)
-        if lines is None:
-            self.show_warning("No line segment detected")
+        def _svm_features(img_bgr: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
+            """Compute 5 SVM features from full image + its green mask (matches training pipeline)."""
+            rows, cols = img_bgr.shape[:2]
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if not contours:
+                return None
+            contour = max(contours, key=cv2.contourArea)
+            area    = cv2.contourArea(contour)
+            if area < _MIN_AREA:
+                return None
+            [vx, vy, x, y] = cv2.fitLine(contour, cv2.DIST_L2, 0, 0.01, 0.01)
+            vx, vy, x, y   = float(vx[0]), float(vy[0]), float(x[0]), float(y[0])
+            if abs(vy) > 0.01:
+                line_x = x + (rows // 2 - y) * (vx / vy)
+            else:
+                M      = cv2.moments(contour)
+                line_x = M["m10"] / M["m00"] if M["m00"] > 0 else cols / 2
+            offset       = float(np.clip((line_x - cols / 2.0) / (cols / 2.0), -1.0, 1.0))
+            angle_norm   = float(np.clip(np.degrees(np.arctan2(vy, vx)) / 90.0, -1.0, 1.0))
+            area_norm    = float(np.clip(area / (rows * cols), 0.0, 1.0))
+            _, _, bw, bh = cv2.boundingRect(contour)
+            aspect_ratio = float(np.clip(bw / (bh + 1e-6), 0.0, 1.0))
+            hull         = cv2.convexHull(contour)
+            hull_area    = cv2.contourArea(hull)
+            solidity     = float(np.clip(area / (hull_area + 1e-6), 0.0, 1.0))
+            return np.array([offset, angle_norm, area_norm, aspect_ratio, solidity], dtype=np.float32)
+
+        h = image.shape[0]
+        near_start = int(h * 0.50)
+
+        # Near zone — current position + SVM features (trained on full image so use full image mask)
+        near_mask  = _green_mask(image[near_start:, :])
+        offset     = _offset_from_mask(near_mask)
+        if offset is not None:
+            offset = float(np.clip(offset - _CAM_OFFSET, -1.0, 1.0))
+        full_mask  = _green_mask(image)
+        feat       = _svm_features(image, full_mask)
+
+        if offset is None or feat is None:
+            self._lost_frames += 1
+            if self._lost_frames > 10:
+                self.show_alert("Line lost!")
+            else:
+                self.show_warning("No green line detected")
             return None
 
-        best, best_len, best_angle = None, 0, 0.0
-        for x1, y1, x2, y2 in lines[:, 0]:
-            length = np.hypot(x2 - x1, y2 - y1)
-            if length > best_len:
-                best_len = length
-                best = ((x1 + x2) / 2, (y1 + y2) / 2)
-                best_angle = float(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
-
-        cx, cy = best
-        x_norm = float((cx / roi.shape[1]) * 2.0 - 1.0)
-
-        # Crop patch around segment center
-        half = 32
-        h, w = edges.shape
-        patch = cv2.resize(
-            edges[max(0, int(cy) - half):min(h, int(cy) + half),
-                  max(0, int(cx) - half):min(w, int(cx) + half)],
-            (64, 64)
-        )
-        patch_feat = (patch.astype(np.float32) / 255.0).flatten()
-        feat = np.append(patch_feat, [np.float32(x_norm), np.float32(best_angle / 90.0)])
-
+        self._lost_frames = 0
         cls = int(_MODEL.predict(feat.reshape(1, -1))[0])
-        steer = float(np.clip(x_norm, -1.0, 1.0))
+
+        # PID steering
+        error             = offset
+        self._integral    = float(np.clip(self._integral + error, -1.0, 1.0))
+        derivative        = error - self._prev_error
+        self._prev_error  = error
+        steer = float(np.clip(
+            self._Kp * error + self._Ki * self._integral + self._Kd * derivative,
+            -1.0, 1.0
+        ))
 
         if self._frame_count % 30 == 0:
             self.get_logger().info(
-                f"steer={steer:+.2f}  class={['LEFT','STRAIGHT','RIGHT'][cls]}  x_norm={x_norm:+.2f}  frame={self._frame_count}"
+                f"steer={steer:+.2f}  class={['LEFT','STRAIGHT','RIGHT'][cls]}  "
+                f"near={offset:+.2f}  "
+                f"P={self._Kp*error:+.2f}  I={self._Ki*self._integral:+.2f}  D={self._Kd*derivative:+.2f}  frame={self._frame_count}"
             )
-        self.show_notification(f"steer={steer:+.2f}")
+        self.show_notification(f"steer={steer:+.2f}  [{['LEFT','STRAIGHT','RIGHT'][cls]}]")
         return steer
 
 
