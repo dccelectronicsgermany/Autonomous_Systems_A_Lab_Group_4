@@ -170,20 +170,24 @@ class MyLineFollower(LineFollowingInterface):
         cls = int(_MODEL.predict(feat.reshape(1, -1))[0])
 
         # PID steering
-        error             = offset
-        self._integral    = float(np.clip(self._integral + error, -1.0, 1.0))
-        derivative        = error - self._prev_error
-        self._prev_error  = error
+        error            = offset
+        self._integral   = float(np.clip(self._integral + error, -1.0, 1.0))
+        derivative       = error - self._prev_error
+        self._prev_error = error
         pid = self._Kp * error + self._Ki * self._integral + self._Kd * derivative
 
-        # SVM adds a small directional nudge (0.1) on top of PID — PID remains dominant
-        svm_hint = {0: -1.0, 1: 0.0, 2: 1.0}[cls]
-        steer = float(np.clip(pid + 0.03 * svm_hint, -1.0, 1.0))
+        # SVM decides direction, offset magnitude drives the steer
+        if cls == 0:    # LEFT
+            steer = float(np.clip(pid, -1.0, 0.0))
+        elif cls == 2:  # RIGHT
+            steer = float(np.clip(pid, 0.0, 1.0))
+        else:           # STRAIGHT
+            steer = float(np.clip(pid, -1.0, 1.0))
 
         if self._frame_count % 30 == 0:
             self.get_logger().info(
                 f"steer={steer:+.2f}  class={['LEFT','STRAIGHT','RIGHT'][cls]}  "
-                f"near={offset:+.2f}  "
+                f"offset={offset:+.2f}  "
                 f"P={self._Kp*error:+.2f}  I={self._Ki*self._integral:+.2f}  D={self._Kd*derivative:+.2f}  frame={self._frame_count}"
             )
         return steer
