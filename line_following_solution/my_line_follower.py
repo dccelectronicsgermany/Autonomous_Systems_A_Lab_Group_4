@@ -52,12 +52,15 @@ from pathlib import Path
 
 from .interface import LineFollowingInterface
 
-_MODEL = pickle.load(open(str(Path(__file__).parent / "SVM_Line_Following_SVR.pkl"), "rb"))
+_MODEL = pickle.load(open(str(Path(__file__).parent / "Trapezoid_V2_sharp_turns.pkl"), "rb"))
 
-_LOWER_GREEN = np.array([40,  40,  40])
-_UPPER_GREEN = np.array([90, 255, 255])
-_MIN_AREA    = 100
-_CAM_OFFSET  = 0.05  # camera mounted left of center — subtract to correct steering bias
+_LOWER_GREEN = np.array([45,  60,  60])
+_UPPER_GREEN = np.array([85, 255, 255])
+_CAR_CENTER_X = 693   # px — empirically measured from frame 4802
+
+_TRAP_BOT_Y, _TRAP_TOP_Y     = 0.85, 0.45
+_TRAP_BOT_X_L, _TRAP_BOT_X_R = 0.328, 0.789
+_TRAP_TOP_X_L, _TRAP_TOP_X_R = 0.403, 0.697
 
 
 class MyLineFollower(LineFollowingInterface):
@@ -67,17 +70,41 @@ class MyLineFollower(LineFollowingInterface):
     Detect a green line and steer to stay centered on it.
     """
 
-    _Kp = 1.0
-    _Kd = 0.08
+    # PD gains per throttle band: (throttle_max, Kp, Kd)
+    # Tuned so higher throttle gets more aggressive Kp and more damping Kd.
+    # Throttle is set via DEFAULT_THROTTLE env var (default 0.35).
+    # Gains selected based on classical OpenCV controller performance at throttle=0.35.
+    # Higher speeds reduce Kp to prevent overshoot, increase Kd to suppress oscillation.
+    _GAIN_TABLE = [
+        (0.40, 1.0,  0.10),   # throttle ≤ 0.40 — default, tested at 0.35
+        (0.55, 0.90, 0.15),   # throttle ≤ 0.55 — untested, conservative
+        (0.70, 0.80, 0.20),   # throttle ≤ 0.70 — untested, conservative
+        (1.00, 0.70, 0.25),   # throttle > 0.70 — untested, conservative
+    ]
 
     def __init__(self):
         super().__init__("my_line_follower")
         self._frame_count = 0
         self._lost_frames  = 0
         self._prev_error   = 0.0
+        self._last_steer   = 0.0
+
+        # Select gains based on configured throttle
+        self._Kp, self._Kd = self._select_gains(self.default_throttle)
 
         self.on_camera_image(self.detect_line)
-        self.get_logger().info("MyLineFollower initialized — 6-feature SVR (near zone + edge) → PD steering")
+        self.get_logger().info(
+            f"MyLineFollower initialized — throttle={self.default_throttle:.2f} "
+            f"Kp={self._Kp} Kd={self._Kd} — "
+            "6-feature SVR [off_bot,off_mid,off_top,has_bot,has_mid,has_top]"
+        )
+
+    @classmethod
+    def _select_gains(cls, throttle: float):
+        for t_max, kp, kd in cls._GAIN_TABLE:
+            if throttle <= t_max:
+                return kp, kd
+        return cls._GAIN_TABLE[-1][1], cls._GAIN_TABLE[-1][2]
 
     def detect_line(self, image: np.ndarray) -> float | None:
         """
@@ -90,72 +117,116 @@ class MyLineFollower(LineFollowingInterface):
             Steering value in [-1.0, 1.0], or None if line not detected.
         """
         self._frame_count += 1
+        H, W = image.shape[:2]
+        half = W / 2.0
 
-        def _green_mask(roi: np.ndarray) -> np.ndarray:
-            hsv    = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-            mask   = cv2.inRange(hsv, _LOWER_GREEN, _UPPER_GREEN)
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-            mask   = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-            mask   = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel)
-            return mask
+        # ── Trapezoid mask ──────────────────────────────────────────────
+        trap_pts = np.array([
+            [int(_TRAP_TOP_X_L * W), int(_TRAP_TOP_Y * H)],
+            [int(_TRAP_TOP_X_R * W), int(_TRAP_TOP_Y * H)],
+            [int(_TRAP_BOT_X_R * W), int(_TRAP_BOT_Y * H)],
+            [int(_TRAP_BOT_X_L * W), int(_TRAP_BOT_Y * H)],
+        ], dtype=np.int32)
+        tm = np.zeros((H, W), dtype=np.uint8)
+        cv2.fillPoly(tm, [trap_pts], 255)
 
-        def _svm_features(mask: np.ndarray) -> np.ndarray | None:
-            """Compute 6 features from near-zone green mask: 5 contour + 1 edge-based center."""
-            rows, cols = mask.shape[:2]
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if not contours:
-                return None
-            contour = max(contours, key=cv2.contourArea)
-            area    = cv2.contourArea(contour)
-            if area < _MIN_AREA:
-                return None
-            [vx, vy, x, y] = cv2.fitLine(contour, cv2.DIST_L2, 0, 0.01, 0.01)
-            vx, vy, x, y   = float(vx[0]), float(vy[0]), float(x[0]), float(y[0])
-            if abs(vy) > 0.01:
-                line_x = x + (rows // 2 - y) * (vx / vy)
-            else:
-                M      = cv2.moments(contour)
-                line_x = M["m10"] / M["m00"] if M["m00"] > 0 else cols / 2
-            offset       = float(np.clip((line_x - cols / 2.0) / (cols / 2.0), -1.0, 1.0))
-            angle_norm   = float(np.clip(np.degrees(np.arctan2(vy, vx)) / 90.0, -1.0, 1.0))
-            area_norm    = float(np.clip(area / (rows * cols), 0.0, 1.0))
-            _, _, bw, bh = cv2.boundingRect(contour)
-            aspect_ratio = float(np.clip(bw / (bh + 1e-6), 0.0, 1.0))
-            hull         = cv2.convexHull(contour)
-            hull_area    = cv2.contourArea(hull)
-            solidity     = float(np.clip(area / (hull_area + 1e-6), 0.0, 1.0))
-            # edge-based center: midpoint between leftmost and rightmost edge column
-            edges       = cv2.Canny(mask, 50, 150)
-            edge_cols   = np.where(edges.any(axis=0))[0]
-            if len(edge_cols) >= 2:
-                edge_center = (float(edge_cols[0]) + float(edge_cols[-1])) / 2.0
-                edge_offset = float(np.clip((edge_center - cols / 2.0) / (cols / 2.0), -1.0, 1.0))
-            else:
-                edge_offset = offset
-            return np.array([offset, angle_norm, area_norm, aspect_ratio, solidity, edge_offset], dtype=np.float32)
+        # ── Green mask ──────────────────────────────────────────────────
+        hsv    = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        green  = cv2.inRange(hsv, _LOWER_GREEN, _UPPER_GREEN)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        green  = cv2.morphologyEx(green, cv2.MORPH_CLOSE, kernel)
+        green  = cv2.morphologyEx(green, cv2.MORPH_OPEN,  kernel)
+        green  = cv2.bitwise_and(green, tm)
 
-        h         = image.shape[0]
-        near_mask = _green_mask(image[h // 2:, :])
-        feat      = _svm_features(near_mask)
+        y_top = trap_pts[:, 1].min()
+        y_bot = trap_pts[:, 1].max()
+        gmask = green[y_top:y_bot, :]
+        rr    = gmask.shape[0]
 
-        if feat is None:
+        ys, xs = np.where(gmask > 0)
+        if len(ys) < 20:
             self._lost_frames += 1
             if self._lost_frames > 10:
                 self.show_alert("Line lost!")
+                return None
             else:
-                self.show_warning("No green line detected")
-            return None
+                self.show_warning(f"No line — holding last steer {self._last_steer:+.3f}")
+                return self._last_steer
+
+        # Reject compact blobs (foliage, noise) — real lines span many rows even on 90° turns
+        row_span = int(ys.max() - ys.min())
+        if row_span < int(rr * 0.15):
+            self._lost_frames += 1
+            self.show_warning(f"Blob rejected (row_span={row_span}/{rr}) — holding last steer")
+            return self._last_steer
 
         self._lost_frames = 0
-        svr_offset = float(np.clip(_MODEL.predict(feat.reshape(1, -1))[0] - _CAM_OFFSET, -1.0, 1.0))
 
-        # PD on SVR-predicted offset (no integral — SVR output is already smooth)
+        # ── Band sampling ────────────────────────────────────────────────
+        def _band_adaptive(s_start, s_end, slice_half=0.07):
+            step = -1 if s_start > s_end else 1
+            for row in range(int(rr * s_start), int(rr * s_end), step):
+                lo, hi = max(0, row - int(rr * slice_half)), min(rr, row + int(rr * slice_half))
+                idx = (ys >= lo) & (ys < hi)
+                if idx.sum() >= 5:
+                    return float(xs[idx].mean())
+            return None
+
+        def _band_fixed(frac, slice_half=0.07):
+            lo = int(rr * max(0.0, frac - slice_half))
+            hi = int(rr * min(1.0, frac + slice_half))
+            if hi <= lo: hi = lo + 1
+            idx = (ys >= lo) & (ys < hi)
+            return float(xs[idx].mean()) if idx.sum() >= 3 else None
+
+        cx_bot = _band_adaptive(0.99, 0.60)
+        cx_mid = _band_fixed(0.35)
+        cx_top = _band_adaptive(0.01, 0.35)
+
+        off_bot = float(np.clip((cx_bot - _CAR_CENTER_X) / half, -1.0, 1.0)) if cx_bot is not None else None
+        off_mid = float(np.clip((cx_mid - _CAR_CENTER_X) / half, -1.0, 1.0)) if cx_mid is not None else None
+        off_top = float(np.clip((cx_top - _CAR_CENTER_X) / half, -1.0, 1.0)) if cx_top is not None else None
+
+        has_bot = off_bot is not None
+        has_mid = off_mid is not None
+        has_top = off_top is not None
+
+        if not (has_bot or has_mid or has_top):
+            self._lost_frames += 1
+            self.show_warning(f"Bands empty — holding last steer {self._last_steer:+.3f}")
+            return self._last_steer
+
+        # ── 6-feature vector ─────────────────────────────────────────────
+        feat = np.array([
+            off_bot if has_bot else 0.0,
+            off_mid if has_mid else 0.0,
+            off_top if has_top else 0.0,
+            1.0 if has_bot else 0.0,
+            1.0 if has_mid else 0.0,
+            1.0 if has_top else 0.0,
+        ], dtype=np.float32)
+
+        svr_offset = float(np.clip(_MODEL.predict(feat.reshape(1, -1))[0], -1.0, 1.0))
+
+        # ── PD controller ────────────────────────────────────────────────
+        # Kp and Kd are selected at startup from _GAIN_TABLE based on throttle.
         error            = svr_offset
         derivative       = error - self._prev_error
         self._prev_error = error
-        pid   = self._Kp * error + self._Kd * derivative
-        steer = float(np.clip(pid, -1.0, 1.0))
+        steer = float(np.clip(self._Kp * error + self._Kd * derivative, -1.0, 1.0))
 
+        # ── Log every 30 frames (~1 second at 30fps) ─────────────────────
+        if self._frame_count % 30 == 0:
+            direction = "LEFT " if steer < -0.05 else "RIGHT" if steer > 0.05 else "STRAIGHT"
+            self.get_logger().info(
+                f"frame={self._frame_count:6d} | "
+                f"svr={svr_offset:+.3f} | "
+                f"steer={steer:+.3f} | "
+                f"{direction} | "
+                f"bot={feat[0]:+.3f} mid={feat[1]:+.3f} top={feat[2]:+.3f}"
+            )
+
+        self._last_steer = steer
         return steer
 
 
