@@ -15,4 +15,4 @@ visualization_output/
 *.bag
 data/*.db3
 data/*.csv
-data/X_features.npy
+
