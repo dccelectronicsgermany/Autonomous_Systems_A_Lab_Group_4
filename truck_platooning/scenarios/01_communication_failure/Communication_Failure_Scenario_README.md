@@ -5,7 +5,7 @@
 | Field             | Value                                            |
 | ----------------- | ------------------------------------------------ |
 | **Scenario Name** | Communication Failure                            |
-| **Project**       | Traffic Signal System for n-Street Intersections |
+| **Project**       | Truck platooning for n-Street Intersections |
 | **Creator**       | Daniel Chidi Chimezie                            |
 | **Version**       | 1.0                                              |
 | **Date**          | June 1, 2026                                             |
