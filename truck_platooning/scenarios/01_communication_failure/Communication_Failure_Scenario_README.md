@@ -8,7 +8,7 @@
 | **Project**       | Traffic Signal System for n-Street Intersections |
 | **Creator**       | Daniel Chidi Chimezie                            |
 | **Version**       | 1.0                                              |
-| **Date**          | 2026                                             |
+| **Date**          | June 1, 2026                                             |
 | **Scenario ID**   | SC-COM-01                                        |
 
 ---
