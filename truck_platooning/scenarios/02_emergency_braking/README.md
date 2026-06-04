@@ -191,8 +191,8 @@ One of the following events triggers this scenario:
 
 ## SysML Models Included
 
-* Sequence Diagram — `emergency_braking_sequence.puml`
-* State Machine Diagram — `emergency_braking_state_machine.puml`
+* Sequence Diagram — `emergency_braking_sequence.png`
+* State Machine Diagram — `emergency_braking_state_machine.png`
 
 ---
 
