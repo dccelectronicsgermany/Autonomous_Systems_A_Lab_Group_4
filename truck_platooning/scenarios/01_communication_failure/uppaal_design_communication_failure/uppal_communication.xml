@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Place global declarations here
+clock t;
+
+chan heartbeat;
+chan failure_detected;
+chan safe_mode;
+chan recovery_request;
+chan recovery_success;
+
+bool communicationAvailable = true;
+int retryCount = 0;</declaration>
+	<template>
+		<name x="5" y="5">Truck</name>
+		<declaration>// Place local declarations here. </declaration>
+		<location id="id0" x="-459" y="-34">
+			<name x="-612" y="-42">NormalOperation</name>
+		</location>
+		<location id="id1" x="-459" y="-204">
+			<name x="-469" y="-238">Monitoring</name>
+		</location>
+		<location id="id2" x="382" y="-204">
+			<name x="289" y="-238">CommunicationFailure</name>
+		</location>
+		<location id="id3" x="-85" y="127">
+			<name x="-144" y="144">RecoveryAttempt</name>
+		</location>
+		<location id="id4" x="-374" y="127">
+			<name x="-408" y="144">Restored</name>
+		</location>
+		<location id="id5" x="382" y="127">
+			<name x="399" y="119">SafeMode</name>
+			<label kind="invariant" x="382" y="93">t &lt;= 10000</label>
+		</location>
+		<init ref="id0"/>
+		<transition id="id6">
+			<source ref="id3"/>
+			<target ref="id5"/>
+			<label kind="guard" x="110" y="144">communicationAvailable == false</label>
+			<label kind="assignment" x="17" y="153">t = 0</label>
+			<nail x="153" y="178"/>
+		</transition>
+		<transition id="id7">
+			<source ref="id5"/>
+			<target ref="id3"/>
+			<label kind="guard" x="187" y="68">t &gt;= 10000</label>
+			<label kind="assignment" x="-34" y="68">retryCount++, t = 0</label>
+			<nail x="144" y="68"/>
+		</transition>
+		<transition id="id8">
+			<source ref="id4"/>
+			<target ref="id0"/>
+			<label kind="assignment" x="-518" y="34">retryCount = 0, t = 0</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="guard" x="-476" y="-127">communicationAvailable == true</label>
+			<nail x="-450" y="-195"/>
+			<nail x="-408" y="-119"/>
+		</transition>
+		<transition id="id10">
+			<source ref="id2"/>
+			<target ref="id5"/>
+			<label kind="assignment" x="331" y="-51">t = 0</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-348" y="93">communicationAvailable == true</label>
+		</transition>
+		<transition id="id12">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-102" y="-229">t &gt;= 5000</label>
+			<label kind="assignment" x="-187" y="-195">communicationAvailable = false</label>
+		</transition>
+		<transition id="id13">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<nail x="-510" y="-119"/>
+		</transition>
+	</template>
+	<template>
+		<name>CommunicationLink</name>
+		<location id="id14" x="-289" y="25">
+			<name x="-425" y="17">LinkAvailable</name>
+		</location>
+		<location id="id15" x="153" y="-187">
+			<name x="170" y="-204">LinkFailed</name>
+		</location>
+		<location id="id16" x="153" y="187">
+			<name x="170" y="178">LinkRestored</name>
+		</location>
+		<init ref="id14"/>
+		<transition id="id17">
+			<source ref="id16"/>
+			<target ref="id14"/>
+		</transition>
+		<transition id="id18">
+			<source ref="id15"/>
+			<target ref="id16"/>
+			<label kind="assignment" x="68" y="25">communicationAvailable = true</label>
+		</transition>
+		<transition id="id19">
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="assignment" x="-271" y="-81">communicationAvailable = false</label>
+		</transition>
+	</template>
+	<system>T1 = Truck();
+CL = CommunicationLink();
+
+system T1, CL;</system>
+	<queries>
+		<query>
+			<formula>E&lt;&gt; T1.Restored </formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-06-11 19:01:35 +0200">
+			</result>
+		</query>
+	</queries>
+</nta>
