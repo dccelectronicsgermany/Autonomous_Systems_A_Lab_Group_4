@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Place global declarations here.
+broadcast chan advertise;
+
+chan joinToLead;
+chan joinToManager;
+
+chan approvalToLead;
+chan approvalToFollower;
+
+chan positionAdjusted;
+chan formationComplete;
+
+clock t;</declaration>
+	<template>
+		<name x="5" y="5">LeadTruck</name>
+		<declaration>// Place local declarations here.
+</declaration>
+		<location id="id0" x="-204" y="68">
+			<name x="-255" y="59">Idle</name>
+		</location>
+		<location id="id1" x="-204" y="-136">
+			<name x="-246" y="-170">Advertising</name>
+		</location>
+		<location id="id2" x="535" y="-136">
+			<name x="467" y="-178">WaitingForRequest</name>
+		</location>
+		<location id="id3" x="535" y="212">
+			<name x="501" y="229">Formation</name>
+		</location>
+		<location id="id4" x="-195" y="212">
+			<name x="-255" y="229">PlatoonFormed</name>
+		</location>
+		<location id="id5" x="136" y="212">
+			<name x="42" y="229">WaitingForPositionAdjusted</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id6">
+			<source ref="id5"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-76" y="221">t &lt;= 10000</label>
+			<label kind="synchronisation" x="-93" y="187">formationComplete!</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id3"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="280" y="187">positionAdjusted?</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="544" y="8">approvalToLead?</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="76" y="-161">joinToLead?</label>
+		</transition>
+		<transition id="id10">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="-238" y="-68">advertise!</label>
+			<label kind="assignment" x="-229" y="-34">t = 0</label>
+		</transition>
+	</template>
+	<template>
+		<name>FollowerTruck</name>
+		<location id="id11" x="-391" y="76">
+			<name x="-442" y="59">Idle</name>
+		</location>
+		<location id="id12" x="-391" y="-119">
+			<name x="-476" y="-153">AdvertisementReceived</name>
+		</location>
+		<location id="id13" x="331" y="-119">
+			<name x="321" y="-153">SendJoinToLead</name>
+		</location>
+		<location id="id14" x="331" y="314">
+			<name x="314" y="331">WaitForApproval</name>
+		</location>
+		<location id="id15" x="-153" y="314">
+			<name x="-204" y="331">AdjustPosition</name>
+		</location>
+		<location id="id16" x="-382" y="170">
+			<name x="-450" y="170">Joined</name>
+		</location>
+		<location id="id17" x="331" y="93">
+			<name x="348" y="85">SendJoinToManager</name>
+		</location>
+		<init ref="id11"/>
+		<transition id="id18">
+			<source ref="id17"/>
+			<target ref="id14"/>
+		</transition>
+		<transition id="id19">
+			<source ref="id13"/>
+			<target ref="id17"/>
+			<label kind="synchronisation" x="331" y="-30">joinToManager!</label>
+		</transition>
+		<transition id="id20">
+			<source ref="id15"/>
+			<target ref="id16"/>
+			<label kind="synchronisation" x="-391" y="255">positionAdjusted!</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="guard" x="8" y="280">t &lt;= 500</label>
+			<label kind="synchronisation" x="8" y="314">approvalToFollower?</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="synchronisation" x="-102" y="-144">joinToLead!</label>
+			<label kind="assignment" x="-68" y="-119">t = 0</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="-382" y="-34">advertise?</label>
+		</transition>
+	</template>
+	<template>
+		<name>PlatoonManager</name>
+		<location id="id24" x="-323" y="204">
+			<name x="-340" y="221">Idle</name>
+		</location>
+		<location id="id25" x="-323" y="-153">
+			<name x="-333" y="-187">ValidateRequest</name>
+		</location>
+		<location id="id26" x="331" y="-153">
+			<name x="321" y="-187">SendApproval</name>
+		</location>
+		<location id="id27" x="331" y="204">
+			<name x="238" y="213">MonitorFormation</name>
+		</location>
+		<location id="id28" x="331" y="17">
+			<name x="348" y="8">ApprovalSentToLead</name>
+		</location>
+		<init ref="id24"/>
+		<transition id="id29">
+			<source ref="id28"/>
+			<target ref="id27"/>
+			<label kind="synchronisation" x="331" y="93">approvalToFollower!</label>
+		</transition>
+		<transition id="id30">
+			<source ref="id26"/>
+			<target ref="id28"/>
+			<label kind="synchronisation" x="331" y="-85">approvalToLead!</label>
+		</transition>
+		<transition id="id31">
+			<source ref="id27"/>
+			<target ref="id24"/>
+			<label kind="synchronisation" x="-93" y="178">formationComplete?</label>
+		</transition>
+		<transition id="id32">
+			<source ref="id25"/>
+			<target ref="id26"/>
+			<label kind="guard" x="-93" y="-153">t &lt;= 500</label>
+		</transition>
+		<transition id="id33">
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="synchronisation" x="-433" y="-8">joinToManager?</label>
+			<label kind="assignment" x="-391" y="17">t = 0</label>
+		</transition>
+	</template>
+	<system>LT = LeadTruck();
+FT = FollowerTruck();
+PM = PlatoonManager();
+
+system LT, FT, PM;</system>
+	<queries>
+		<query>
+			<formula>E&lt;&gt;FT.Joined</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-06-11 10:35:05 +0200">
+			</result>
+		</query>
+	</queries>
+</nta>
