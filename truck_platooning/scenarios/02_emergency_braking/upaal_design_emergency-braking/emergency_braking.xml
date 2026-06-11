@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Place global declarations here.
+broadcast chan emergencyBrake;
+
+chan ackBraking;
+broadcast chan allStopped;
+broadcast chan standby;
+
+clock t;
+
+bool v2vAvailable = true;</declaration>
+	<template>
+		<name x="5" y="5">LeadTruck</name>
+		<declaration>// Place local declarations here.
+</declaration>
+		<location id="id0" x="-204" y="68">
+			<name x="-255" y="59">NormalOperation</name>
+		</location>
+		<location id="id1" x="-204" y="-136">
+			<name x="-246" y="-170">HazardDetected</name>
+		</location>
+		<location id="id2" x="331" y="-136">
+			<name x="280" y="-170">EmergencyBraking</name>
+		</location>
+		<location id="id3" x="331" y="68">
+			<name x="348" y="59">Stopped</name>
+		</location>
+		<location id="id4" x="68" y="68">
+			<name x="17" y="85">Standby</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id5">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="assignment" x="-255" y="-34">t = 0</label>
+		</transition>
+		<transition id="id6">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-68" y="-161">t &lt;= 50</label>
+			<label kind="synchronisation" x="-68" y="-136">emergencyBrake!</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="331" y="-34">allStopped?</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="144" y="42">standby?</label>
+		</transition>
+	</template>
+	<template>
+		<name>FollowerTruck</name>
+		<location id="id9" x="-391" y="76">
+			<name x="-442" y="59">NormalOperation</name>
+		</location>
+		<location id="id10" x="-391" y="-119">
+			<name x="-476" y="-153">SignalReceived</name>
+		</location>
+		<location id="id11" x="331" y="-119">
+			<name x="280" y="-153">EmergencyBraking</name>
+		</location>
+		<location id="id12" x="331" y="76">
+			<name x="348" y="85">Stopped</name>
+		</location>
+		<location id="id13" x="-85" y="76">
+			<name x="-136" y="93">Standby</name>
+		</location>
+		<init ref="id9"/>
+		<transition id="id14">
+			<source ref="id9"/>
+			<target ref="id10"/>
+			<label kind="synchronisation" x="-382" y="-34">emergencyBrake?</label>
+			<label kind="assignment" x="-382" y="-8">t = 0</label>
+		</transition>
+		<transition id="id15">
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="guard" x="-102" y="-144">t &lt;= 150</label>
+			<label kind="synchronisation" x="-102" y="-119">ackBraking!</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="331" y="-17">allStopped?</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="synchronisation" x="68" y="59">standby?</label>
+		</transition>
+	</template>
+	<template>
+		<name>PlatoonManager</name>
+		<location id="id18" x="-323" y="204">
+			<name x="-340" y="221">Idle</name>
+		</location>
+		<location id="id19" x="-323" y="-153">
+			<name x="-333" y="-187">MonitoringBraking</name>
+		</location>
+		<location id="id20" x="331" y="-153">
+			<name x="280" y="-187">ConfirmingStopped</name>
+		</location>
+		<location id="id21" x="331" y="204">
+			<name x="238" y="213">BroadcastingStandby</name>
+		</location>
+		<location id="id22" x="-323" y="17">
+			<name x="-408" y="8">StandbyComplete</name>
+		</location>
+		<init ref="id18"/>
+		<transition id="id23">
+			<source ref="id18"/>
+			<target ref="id19"/>
+			<label kind="synchronisation" x="-433" y="8">emergencyBrake?</label>
+			<label kind="assignment" x="-391" y="34">t = 0</label>
+		</transition>
+		<transition id="id24">
+			<source ref="id19"/>
+			<target ref="id20"/>
+			<label kind="guard" x="-85" y="-153">t &lt;= 200</label>
+			<label kind="synchronisation" x="-85" y="-119">ackBraking?</label>
+		</transition>
+		<transition id="id25">
+			<source ref="id20"/>
+			<target ref="id21"/>
+			<label kind="synchronisation" x="331" y="8">allStopped!</label>
+		</transition>
+		<transition id="id26">
+			<source ref="id21"/>
+			<target ref="id22"/>
+			<label kind="synchronisation" x="-85" y="178">standby!</label>
+		</transition>
+		<transition id="id27">
+			<source ref="id22"/>
+			<target ref="id18"/>
+		</transition>
+	</template>
+	<system>LT = LeadTruck();
+FT = FollowerTruck();
+PM = PlatoonManager();
+
+system LT, FT, PM;</system>
+	<queries>
+		<query>
+			<formula>E&lt;&gt; FT.Stopped</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>E&lt;&gt; LT.Standby</formula>
+			<comment/>
+		</query>
+	</queries>
+</nta>
