@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Place global declarations here.
+chan statusUpdate;
+chan gapTooSmall;
+chan safeGapRestored;
+chan emergencyBrake;
+chan commFailure;
+chan enterSafeMode;
+chan recoveryAttempt;
+chan commRestored;
+
+clock t;</declaration>
+	<template>
+		<name x="5" y="5">FollowerTruckControl</name>
+		<declaration>// Place local declarations here.
+</declaration>
+		<location id="id0" x="-688" y="-110">
+			<name x="-841" y="-119">NormalFollowing</name>
+		</location>
+		<location id="id1" x="-688" y="-365">
+			<name x="-722" y="-399">MaintainGap</name>
+		</location>
+		<location id="id2" x="-373" y="-365">
+			<name x="-407" y="-399">GapTooSmall</name>
+		</location>
+		<location id="id3" x="-34" y="-365">
+			<name x="-59" y="-399">Braking</name>
+		</location>
+		<location id="id4" x="331" y="-365">
+			<name x="321" y="-399">SafeGapRestored</name>
+		</location>
+		<location id="id5" x="-102" y="-144">
+			<name x="-85" y="-153">EmergencyStop</name>
+		</location>
+		<location id="id6" x="332" y="60">
+			<name x="349" y="51">SafeMode</name>
+			<label kind="invariant" x="322" y="77">t &lt;= 10000</label>
+		</location>
+		<location id="id7" x="-25" y="60">
+			<name x="-59" y="69">Recovery</name>
+		</location>
+		<location id="id8" x="-382" y="60">
+			<name x="-416" y="77">Restored</name>
+		</location>
+		<location id="id9" x="331" y="-204">
+			<name x="348" y="-212">FailureDetected</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id10">
+			<source ref="id0"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-484" y="-153">emergencyBrake?</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id3"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-119" y="-297">emergencyBrake?</label>
+		</transition>
+		<transition id="id12">
+			<source ref="id2"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-314" y="-289">emergencyBrake?</label>
+		</transition>
+		<transition id="id13">
+			<source ref="id9"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="331" y="-42">enterSafeMode?</label>
+			<label kind="assignment" x="331" y="-72">t = 0</label>
+		</transition>
+		<transition id="id14">
+			<source ref="id1"/>
+			<target ref="id9"/>
+			<label kind="synchronisation" x="93" y="-85">commFailure?</label>
+			<nail x="-17" y="-17"/>
+		</transition>
+		<transition id="id15">
+			<source ref="id8"/>
+			<target ref="id0"/>
+		</transition>
+		<transition id="id16">
+			<source ref="id7"/>
+			<target ref="id8"/>
+			<label kind="synchronisation" x="-254" y="68">commRestored?</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="guard" x="102" y="34">t &gt;= 10000</label>
+			<label kind="synchronisation" x="77" y="68">recoveryAttempt?</label>
+		</transition>
+		<transition id="id18">
+			<source ref="id1"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-391" y="-246">emergencyBrake?</label>
+			<nail x="-178" y="-178"/>
+		</transition>
+		<transition id="id19">
+			<source ref="id4"/>
+			<target ref="id1"/>
+			<nail x="-144" y="-501"/>
+		</transition>
+		<transition id="id20">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="68" y="-390">safeGapRestored?</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-212" y="-390">t &lt;= 100</label>
+			<label kind="assignment" x="-195" y="-365">t = 0</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-543" y="-390">gapTooSmall?</label>
+			<nail x="-552" y="-365"/>
+		</transition>
+		<transition id="id23">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="-688" y="-254">statusUpdate?</label>
+		</transition>
+	</template>
+	<template>
+		<name>LeadTruckControl</name>
+		<location id="id24" x="-416" y="17">
+			<name x="-544" y="8">NormalDriving</name>
+		</location>
+		<location id="id25" x="-136" y="-161">
+			<name x="-195" y="-195">BroadcastStatus</name>
+		</location>
+		<location id="id26" x="263" y="-161">
+			<name x="195" y="-195">ObstacleDetected</name>
+		</location>
+		<location id="id27" x="263" y="144">
+			<name x="212" y="161">EmergencyBraking</name>
+		</location>
+		<location id="id28" x="-136" y="144">
+			<name x="-161" y="161">Stopped</name>
+		</location>
+		<init ref="id24"/>
+		<transition id="id29">
+			<source ref="id27"/>
+			<target ref="id28"/>
+		</transition>
+		<transition id="id30">
+			<source ref="id26"/>
+			<target ref="id27"/>
+			<label kind="guard" x="263" y="-42">t &lt;= 100</label>
+			<label kind="synchronisation" x="263" y="-17">emergencyBrake!</label>
+		</transition>
+		<transition id="id31">
+			<source ref="id24"/>
+			<target ref="id26"/>
+		</transition>
+		<transition id="id32">
+			<source ref="id25"/>
+			<target ref="id24"/>
+			<nail x="-331" y="-127"/>
+		</transition>
+		<transition id="id33">
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="synchronisation" x="-246" y="-102">statusUpdate!</label>
+			<label kind="assignment" x="-212" y="-119">t = 0</label>
+			<nail x="-391" y="0"/>
+		</transition>
+	</template>
+	<template>
+		<name>DistanceController</name>
+		<location id="id34" x="-382" y="-136">
+			<name x="-424" y="-170">SafeDistance</name>
+		</location>
+		<location id="id35" x="59" y="-136">
+			<name x="-8" y="-170">DistanceTooSmall</name>
+		</location>
+		<location id="id36" x="59" y="153">
+			<name x="-8" y="170">CorrectingDistance</name>
+		</location>
+		<location id="id37" x="-382" y="153">
+			<name x="-450" y="170">DistanceRestored</name>
+		</location>
+		<init ref="id34"/>
+		<transition id="id38">
+			<source ref="id37"/>
+			<target ref="id34"/>
+		</transition>
+		<transition id="id39">
+			<source ref="id36"/>
+			<target ref="id37"/>
+			<label kind="guard" x="-212" y="127">t &lt;= 500</label>
+			<label kind="synchronisation" x="-238" y="161">safeGapRestored!</label>
+		</transition>
+		<transition id="id40">
+			<source ref="id35"/>
+			<target ref="id36"/>
+		</transition>
+		<transition id="id41">
+			<source ref="id34"/>
+			<target ref="id35"/>
+			<label kind="synchronisation" x="-221" y="-161">gapTooSmall!</label>
+		</transition>
+	</template>
+	<template>
+		<name>CommunicationMonitor</name>
+		<location id="id42" x="-450" y="-25">
+			<name x="-586" y="-34">CommunicationOK</name>
+		</location>
+		<location id="id43" x="-195" y="-195">
+			<name x="-255" y="-229">FailureDetected</name>
+		</location>
+		<location id="id44" x="212" y="-195">
+			<name x="144" y="-229">SafeModeActivated</name>
+		</location>
+		<location id="id45" x="212" y="119">
+			<name x="161" y="136">RecoveryAttempt</name>
+		</location>
+		<location id="id46" x="-187" y="119">
+			<name x="-272" y="136">CommunicationRestored</name>
+		</location>
+		<init ref="id42"/>
+		<transition id="id47">
+			<source ref="id46"/>
+			<target ref="id42"/>
+		</transition>
+		<transition id="id48">
+			<source ref="id45"/>
+			<target ref="id46"/>
+			<label kind="synchronisation" x="-59" y="93">commRestored!</label>
+		</transition>
+		<transition id="id49">
+			<source ref="id44"/>
+			<target ref="id45"/>
+			<label kind="guard" x="212" y="-76">t &gt;= 10000</label>
+			<label kind="synchronisation" x="212" y="-51">recoveryAttempt!</label>
+		</transition>
+		<transition id="id50">
+			<source ref="id43"/>
+			<target ref="id44"/>
+			<label kind="synchronisation" x="-68" y="-221">enterSafeMode!</label>
+		</transition>
+		<transition id="id51">
+			<source ref="id42"/>
+			<target ref="id43"/>
+			<label kind="synchronisation" x="-399" y="-144">commFailure!</label>
+			<label kind="assignment" x="-374" y="-119">t = 0</label>
+		</transition>
+	</template>
+	<system>LT = LeadTruckControl();
+FT = FollowerTruckControl();
+DC = DistanceController();
+CM = CommunicationMonitor();
+
+system LT, FT, DC, CM;</system>
+	<queries>
+		<query>
+			<formula>A[] !(FT.SafeMode &amp;&amp; DC.DistanceTooSmall)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-06-16 16:25:55 +0200">
+			</result>
+		</query>
+	</queries>
+</nta>
