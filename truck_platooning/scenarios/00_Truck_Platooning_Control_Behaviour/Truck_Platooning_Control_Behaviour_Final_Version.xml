@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Place global declarations here.
+chan statusUpdate;
+chan gapTooSmall;
+chan safeGapRestored;
+broadcast chan emergencyBrake;
+chan commFailure;
+chan enterSafeMode;
+chan recoveryAttempt;
+chan commRestored;
+broadcast chan obstacleCleared;
+
+const int N = 4;       // total trucks
+const int F = N - 1;   // follower trucks
+
+const int BRAKE_TIME = 100;
+const int GAP_TIME = 500;
+const int RECOVERY_TIME = 10000;
+const int STATUS_TIME = 100;
+
+const int TOTAL_GAP_TIME = GAP_TIME * N;
+const int TOTAL_RECOVERY_TIME = RECOVERY_TIME * N;
+bool safeDistance = true;
+
+clock tBrake;
+clock tGap;
+clock tRecovery;
+clock tStatus;</declaration>
+	<template>
+		<name x="5" y="5">FollowerTruckControl</name>
+		<declaration>// Place local declarations here.
+</declaration>
+		<location id="id0" x="-688" y="-110">
+			<name x="-841" y="-119">NormalFollowing</name>
+		</location>
+		<location id="id1" x="-688" y="-365">
+			<name x="-722" y="-399">MaintainGap</name>
+		</location>
+		<location id="id2" x="-374" y="-365">
+			<name x="-408" y="-399">GapTooSmall</name>
+			<label kind="invariant" x="-434" y="-348">tGap &lt;= GAP_TIME</label>
+		</location>
+		<location id="id3" x="-34" y="-365">
+			<name x="-59" y="-399">Braking</name>
+		</location>
+		<location id="id4" x="331" y="-365">
+			<name x="348" y="-382">SafeGapRestored</name>
+		</location>
+		<location id="id5" x="-102" y="-144">
+			<name x="-85" y="-153">EmergencyStop</name>
+		</location>
+		<location id="id6" x="332" y="60">
+			<name x="348" y="34">SafeMode</name>
+			<label kind="invariant" x="322" y="77">tRecovery &lt;= TOTAL_RECOVERY_TIME</label>
+		</location>
+		<location id="id7" x="-25" y="60">
+			<name x="-59" y="69">Recovery</name>
+		</location>
+		<location id="id8" x="-382" y="60">
+			<name x="-416" y="77">Restored</name>
+		</location>
+		<location id="id9" x="331" y="-204">
+			<name x="348" y="-212">FailureDetected</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id10">
+			<source ref="id8"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-272" y="-17">emergencyBrake?</label>
+			<nail x="-212" y="0"/>
+		</transition>
+		<transition id="id11">
+			<source ref="id7"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-84" y="-59">emergencyBrake?</label>
+		</transition>
+		<transition id="id12">
+			<source ref="id9"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="59" y="-195">emergencyBrake?</label>
+		</transition>
+		<transition id="id13">
+			<source ref="id6"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="127" y="-85">emergencyBrake?</label>
+			<nail x="170" y="-102"/>
+		</transition>
+		<transition id="id14">
+			<source ref="id9"/>
+			<target ref="id6"/>
+			<label kind="guard" x="331" y="-106">safeDistance</label>
+			<label kind="synchronisation" x="331" y="-89">enterSafeMode?</label>
+			<label kind="assignment" x="331" y="-72">tRecovery = 0</label>
+		</transition>
+		<transition id="id15">
+			<source ref="id4"/>
+			<target ref="id9"/>
+			<label kind="synchronisation" x="331" y="-301">commFailure?</label>
+			<label kind="assignment" x="331" y="-284">tRecovery = 0</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id0"/>
+			<target ref="id9"/>
+			<label kind="synchronisation" x="-493" y="-76">commFailure?</label>
+			<label kind="assignment" x="-493" y="-51">tRecovery = 0</label>
+			<nail x="-297" y="-25"/>
+		</transition>
+		<transition id="id17">
+			<source ref="id4"/>
+			<target ref="id0"/>
+			<nail x="314" y="-450"/>
+			<nail x="314" y="-535"/>
+			<nail x="-773" y="-527"/>
+			<nail x="-773" y="-255"/>
+			<nail x="-773" y="-246"/>
+		</transition>
+		<transition id="id18">
+			<source ref="id0"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="-272" y="-578">safeGapRestored?</label>
+			<nail x="-714" y="-127"/>
+			<nail x="-790" y="-246"/>
+			<nail x="-790" y="-552"/>
+			<nail x="331" y="-552"/>
+			<nail x="331" y="-391"/>
+		</transition>
+		<transition id="id19">
+			<source ref="id5"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-493" y="-136">obstacleCleared?</label>
+			<nail x="-450" y="-144"/>
+		</transition>
+		<transition id="id20">
+			<source ref="id0"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-518" y="-187">emergencyBrake?</label>
+			<nail x="-484" y="-195"/>
+		</transition>
+		<transition id="id21">
+			<source ref="id3"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-119" y="-297">emergencyBrake?</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id2"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-314" y="-289">emergencyBrake?</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id8"/>
+			<target ref="id0"/>
+		</transition>
+		<transition id="id24">
+			<source ref="id7"/>
+			<target ref="id8"/>
+			<label kind="synchronisation" x="-254" y="68">commRestored?</label>
+		</transition>
+		<transition id="id25">
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="guard" x="59" y="34">tRecovery &gt;= RECOVERY_TIME</label>
+			<label kind="synchronisation" x="34" y="68">recoveryAttempt?</label>
+		</transition>
+		<transition id="id26">
+			<source ref="id1"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="-391" y="-246">emergencyBrake?</label>
+			<nail x="-178" y="-178"/>
+		</transition>
+		<transition id="id27">
+			<source ref="id4"/>
+			<target ref="id1"/>
+			<nail x="323" y="-365"/>
+			<nail x="297" y="-374"/>
+			<nail x="-144" y="-501"/>
+		</transition>
+		<transition id="id28">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="guard" x="93" y="-357">tGap &lt;= GAP_TIME</label>
+			<label kind="synchronisation" x="68" y="-390">safeGapRestored?</label>
+			<nail x="297" y="-365"/>
+			<nail x="297" y="-365"/>
+		</transition>
+		<transition id="id29">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-229" y="-390">tGap &lt;= GAP_TIME</label>
+			<label kind="assignment" x="-212" y="-365">tGap = 0</label>
+		</transition>
+		<transition id="id30">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-543" y="-390">gapTooSmall?</label>
+			<nail x="-552" y="-365"/>
+		</transition>
+		<transition id="id31">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="-688" y="-254">statusUpdate?</label>
+		</transition>
+	</template>
+	<template>
+		<name>LeadTruckControl</name>
+		<location id="id32" x="-518" y="76">
+			<name x="-646" y="67">NormalDriving</name>
+		</location>
+		<location id="id33" x="-51" y="-289">
+			<name x="-34" y="-298">BroadcastStatus</name>
+			<label kind="invariant" x="-136" y="-332">tStatus &lt;= STATUS_TIME</label>
+		</location>
+		<location id="id34" x="280" y="-161">
+			<name x="212" y="-195">ObstacleDetected</name>
+			<label kind="invariant" x="297" y="-170">tBrake &lt;= BRAKE_TIME</label>
+		</location>
+		<location id="id35" x="280" y="195">
+			<name x="229" y="212">EmergencyBraking</name>
+		</location>
+		<location id="id36" x="-144" y="204">
+			<name x="-169" y="221">Stopped</name>
+		</location>
+		<init ref="id32"/>
+		<transition id="id37">
+			<source ref="id36"/>
+			<target ref="id32"/>
+			<label kind="synchronisation" x="-357" y="127">obstacleCleared!</label>
+		</transition>
+		<transition id="id38">
+			<source ref="id35"/>
+			<target ref="id36"/>
+		</transition>
+		<transition id="id39">
+			<source ref="id34"/>
+			<target ref="id35"/>
+			<label kind="guard" x="263" y="-42">tBrake &lt;= BRAKE_TIME</label>
+			<label kind="synchronisation" x="263" y="-17">emergencyBrake!</label>
+		</transition>
+		<transition id="id40">
+			<source ref="id32"/>
+			<target ref="id34"/>
+			<label kind="assignment" x="-119" y="-68">tBrake = 0</label>
+		</transition>
+		<transition id="id41">
+			<source ref="id33"/>
+			<target ref="id32"/>
+			<label kind="guard" x="-518" y="-153">tStatus &lt;= STATUS_TIME</label>
+			<nail x="-433" y="-127"/>
+		</transition>
+		<transition id="id42">
+			<source ref="id32"/>
+			<target ref="id33"/>
+			<label kind="synchronisation" x="-297" y="-119">statusUpdate!</label>
+			<label kind="assignment" x="-246" y="-153">tStatus = 0</label>
+			<nail x="-306" y="-34"/>
+		</transition>
+	</template>
+	<template>
+		<name>DistanceController</name>
+		<location id="id43" x="-459" y="-136">
+			<name x="-501" y="-170">SafeDistance</name>
+		</location>
+		<location id="id44" x="59" y="-136">
+			<name x="-8" y="-170">DistanceTooSmall</name>
+		</location>
+		<location id="id45" x="59" y="153">
+			<name x="-8" y="170">CorrectingDistance</name>
+		</location>
+		<location id="id46" x="-459" y="153">
+			<name x="-527" y="170">DistanceRestored</name>
+		</location>
+		<init ref="id43"/>
+		<transition id="id47">
+			<source ref="id46"/>
+			<target ref="id43"/>
+		</transition>
+		<transition id="id48">
+			<source ref="id45"/>
+			<target ref="id46"/>
+			<label kind="guard" x="-161" y="127">tGap &lt;= GAP_TIME</label>
+			<label kind="synchronisation" x="-161" y="161">safeGapRestored!</label>
+			<label kind="assignment" x="-365" y="127">safeDistance = true</label>
+		</transition>
+		<transition id="id49">
+			<source ref="id44"/>
+			<target ref="id45"/>
+		</transition>
+		<transition id="id50">
+			<source ref="id43"/>
+			<target ref="id44"/>
+			<label kind="synchronisation" x="-263" y="-161">gapTooSmall!</label>
+			<label kind="assignment" x="-246" y="-127">safeDistance = false</label>
+		</transition>
+	</template>
+	<template>
+		<name>CommunicationMonitor</name>
+		<location id="id51" x="-450" y="-25">
+			<name x="-586" y="-34">CommunicationOK</name>
+		</location>
+		<location id="id52" x="-195" y="-195">
+			<name x="-255" y="-229">FailureDetected</name>
+		</location>
+		<location id="id53" x="212" y="-195">
+			<name x="144" y="-229">SafeModeActivated</name>
+		</location>
+		<location id="id54" x="212" y="119">
+			<name x="161" y="136">RecoveryAttempt</name>
+		</location>
+		<location id="id55" x="-187" y="119">
+			<name x="-272" y="136">CommunicationRestored</name>
+		</location>
+		<init ref="id51"/>
+		<transition id="id56">
+			<source ref="id55"/>
+			<target ref="id51"/>
+		</transition>
+		<transition id="id57">
+			<source ref="id54"/>
+			<target ref="id55"/>
+			<label kind="synchronisation" x="-59" y="93">commRestored!</label>
+		</transition>
+		<transition id="id58">
+			<source ref="id53"/>
+			<target ref="id54"/>
+			<label kind="guard" x="212" y="-76">tRecovery &gt;= RECOVERY_TIME</label>
+			<label kind="synchronisation" x="212" y="-51">recoveryAttempt!</label>
+		</transition>
+		<transition id="id59">
+			<source ref="id52"/>
+			<target ref="id53"/>
+			<label kind="synchronisation" x="-68" y="-221">enterSafeMode!</label>
+		</transition>
+		<transition id="id60">
+			<source ref="id51"/>
+			<target ref="id52"/>
+			<label kind="synchronisation" x="-399" y="-144">commFailure!</label>
+			<label kind="assignment" x="-374" y="-119">tRecovery = 0</label>
+		</transition>
+	</template>
+	<system>LT = LeadTruckControl();
+FT = FollowerTruckControl();
+DC = DistanceController();
+CM = CommunicationMonitor();
+
+system LT, FT, DC, CM;</system>
+	<queries>
+		<option key="--diagnostic" value="1"/>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-07-03 11:27:37 +0200">
+				<option key="--diagnostic" value="1"/>
+			</result>
+		</query>
+	</queries>
+</nta>
