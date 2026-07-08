@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// ---------------- Communication Channels ----------------
+broadcast chan advertise;
+broadcast chan restartFormation;
+
+chan joinToLead;
+chan joinToManager;
+
+chan approvalToLead;
+chan approvalToFollower;
+
+chan positionAdjusted;
+chan formationComplete;
+
+const int N = 4;                 // total trucks: 1 lead + 3 followers
+const int F = N - 1;             // follower trucks
+
+const int JOIN_TIME = 500;       // time for one follower to join
+const int FORMATION_TIME = 10000;
+const int TOTAL_FORMATION_TIME = FORMATION_TIME * N;
+
+clock t;</declaration>
+	<template>
+		<name x="5" y="5">LeadTruck</name>
+		<declaration>// Place local declarations here.
+</declaration>
+		<location id="id0" x="-229" y="68">
+			<name x="-365" y="59">NormalDriving</name>
+		</location>
+		<location id="id1" x="-229" y="-136">
+			<name x="-271" y="-170">Advertising</name>
+		</location>
+		<location id="id2" x="433" y="-136">
+			<name x="365" y="-178">WaitingForRequest</name>
+			<label kind="invariant" x="450" y="-144">t &lt;= JOIN_TIME</label>
+		</location>
+		<location id="id3" x="433" y="212">
+			<name x="399" y="229">Formation</name>
+		</location>
+		<location id="id4" x="-229" y="212">
+			<name x="-289" y="229">PlatoonFormed</name>
+		</location>
+		<location id="id5" x="136" y="212">
+			<name x="51" y="229">WaitingForPositionAdjusted</name>
+			<label kind="invariant" x="25" y="178">t &lt;= TOTAL_FORMATION_TIME</label>
+		</location>
+		<init ref="id0"/>
+		<transition id="id6">
+			<source ref="id4"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-229" y="123">restartFormation!</label>
+			<label kind="assignment" x="-229" y="140">t = 0</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id5"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-170" y="221">t &lt;= TOTAL_FORMATION_TIME</label>
+			<label kind="synchronisation" x="-136" y="187">formationComplete!</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id3"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="246" y="187">positionAdjusted?</label>
+			<label kind="assignment" x="306" y="212">t = 0</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="442" y="8">approvalToLead?</label>
+		</transition>
+		<transition id="id10">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="76" y="-161">joinToLead?</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="-229" y="-68">advertise!</label>
+			<label kind="assignment" x="-229" y="-34">t = 0</label>
+		</transition>
+	</template>
+	<template>
+		<name>FollowerTruck</name>
+		<location id="id12" x="-391" y="85">
+			<name x="-527" y="76">NormalDriving</name>
+		</location>
+		<location id="id13" x="-391" y="-119">
+			<name x="-476" y="-153">AdvertisementReceived</name>
+		</location>
+		<location id="id14" x="331" y="-119">
+			<name x="321" y="-153">SendJoinToLead</name>
+		</location>
+		<location id="id15" x="331" y="314">
+			<name x="314" y="331">WaitForApproval</name>
+			<label kind="invariant" x="348" y="297">t &lt;= JOIN_TIME</label>
+		</location>
+		<location id="id16" x="-153" y="314">
+			<name x="-204" y="331">AdjustPosition</name>
+		</location>
+		<location id="id17" x="-391" y="314">
+			<name x="-459" y="314">Joined</name>
+		</location>
+		<location id="id18" x="331" y="93">
+			<name x="348" y="85">SendJoinToManager</name>
+		</location>
+		<init ref="id12"/>
+		<transition id="id19">
+			<source ref="id17"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="-391" y="178">restartFormation?</label>
+		</transition>
+		<transition id="id20">
+			<source ref="id18"/>
+			<target ref="id15"/>
+			<label kind="synchronisation" x="331" y="186">joinToManager!</label>
+			<label kind="assignment" x="331" y="203">t = 0</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id14"/>
+			<target ref="id18"/>
+		</transition>
+		<transition id="id22">
+			<source ref="id16"/>
+			<target ref="id17"/>
+			<label kind="synchronisation" x="-323" y="289">positionAdjusted!</label>
+			<label kind="assignment" x="-289" y="314">t = 0</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id15"/>
+			<target ref="id16"/>
+			<label kind="guard" x="8" y="280">t &lt;= JOIN_TIME</label>
+			<label kind="synchronisation" x="8" y="314">approvalToFollower?</label>
+		</transition>
+		<transition id="id24">
+			<source ref="id13"/>
+			<target ref="id14"/>
+			<label kind="synchronisation" x="-102" y="-144">joinToLead!</label>
+			<label kind="assignment" x="-68" y="-119">t = 0</label>
+		</transition>
+		<transition id="id25">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="synchronisation" x="-382" y="-34">advertise?</label>
+		</transition>
+	</template>
+	<template>
+		<name>PlatoonManager</name>
+		<location id="id26" x="-323" y="204">
+			<name x="-340" y="221">Standby</name>
+		</location>
+		<location id="id27" x="-323" y="-153">
+			<name x="-365" y="-187">ValidateRequest</name>
+			<label kind="invariant" x="-459" y="-161">t &lt;= JOIN_TIME</label>
+		</location>
+		<location id="id28" x="331" y="-153">
+			<name x="321" y="-187">SendApproval</name>
+			<label kind="invariant" x="348" y="-161">t &lt;= JOIN_TIME</label>
+		</location>
+		<location id="id29" x="331" y="204">
+			<name x="238" y="213">MonitorFormation</name>
+		</location>
+		<location id="id30" x="331" y="17">
+			<name x="348" y="8">ApprovalSentToLead</name>
+			<label kind="invariant" x="204" y="8">t &lt;= JOIN_TIME</label>
+		</location>
+		<init ref="id26"/>
+		<transition id="id31">
+			<source ref="id30"/>
+			<target ref="id29"/>
+			<label kind="synchronisation" x="331" y="93">approvalToFollower!</label>
+		</transition>
+		<transition id="id32">
+			<source ref="id28"/>
+			<target ref="id30"/>
+			<label kind="synchronisation" x="331" y="-85">approvalToLead!</label>
+		</transition>
+		<transition id="id33">
+			<source ref="id29"/>
+			<target ref="id26"/>
+			<label kind="synchronisation" x="-93" y="178">formationComplete?</label>
+		</transition>
+		<transition id="id34">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="guard" x="-93" y="-153">t &lt;= JOIN_TIME</label>
+		</transition>
+		<transition id="id35">
+			<source ref="id26"/>
+			<target ref="id27"/>
+			<label kind="synchronisation" x="-433" y="-8">joinToManager?</label>
+			<label kind="assignment" x="-391" y="17">t = 0</label>
+		</transition>
+	</template>
+	<system>LT = LeadTruck();
+FT = FollowerTruck();
+PM = PlatoonManager();
+
+system LT, FT, PM;</system>
+	<queries>
+		<option key="--diagnostic" value="1"/>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-07-08 16:10:43 +0200">
+				<option key="--diagnostic" value="1"/>
+			</result>
+		</query>
+	</queries>
+</nta>
